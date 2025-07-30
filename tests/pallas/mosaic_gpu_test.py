@@ -1074,6 +1074,25 @@ class PallasCallTest(PallasTest, jtu.CudaArchSpecificTest):
 
     np.testing.assert_array_equal(kernel(), np.ones((128,), dtype=jnp.float32))
 
+  def test_barrier_test(self):
+    self.skip_if_wg_semantics()
+
+    @functools.partial(
+        self.pallas_call,
+        out_shape=jax.ShapeDtypeStruct((8,), jnp.int32),
+        scratch_shapes=[plgpu.Barrier(num_barriers=2)],
+    )
+    def kernel(o_ref, barrier_ref):
+      o_ref[0] = plgpu.barrier_test(barrier_ref.at[0]).astype(jnp.int32)
+      o_ref[1] = plgpu.barrier_test(barrier_ref.at[1]).astype(jnp.int32)
+      plgpu.barrier_arrive(barrier_ref.at[0])
+      o_ref[2] = plgpu.barrier_test(barrier_ref.at[0]).astype(jnp.int32)
+      o_ref[3] = plgpu.barrier_test(barrier_ref.at[1]).astype(jnp.int32)
+      plgpu.barrier_arrive(barrier_ref.at[1])
+      o_ref[4] = plgpu.barrier_test(barrier_ref.at[1]).astype(jnp.int32)
+
+    np.testing.assert_array_equal(kernel()[:5], np.array([0, 0, 1, 0, 1]))
+
   @parameterized.named_parameters(
       {
           "testcase_name": "1d_none",

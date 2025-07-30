@@ -1042,6 +1042,23 @@ class BarrierRef:
         1,
     )
 
+  def test_parity(self, parity, orders_tensor_core=False) -> ir.Value:
+    i32 = ir.IntegerType.get_signless(32)
+    parity = arith.extui(i32, parity)
+    wait_complete = nvvm.mbarrier_test_wait(self.get_ptr(), parity)
+    if orders_tensor_core:
+      with when(wait_complete):
+        nvvm.tcgen05_fence(nvvm.Tcgen05FenceKind.AFTER_THREAD_SYNC)
+    return wait_complete
+
+  def test(self, orders_tensor_core: bool = False) -> ir.Value:
+    parities = memref.load(self.phases, [])
+    parity, new_parities = self.update_parities(parities)
+    wait_complete = self.test_parity(parity, orders_tensor_core)
+    with when(wait_complete):
+      memref.store(new_parities, self.phases, [])
+    return wait_complete
+
   def wait_parity(self, parity, orders_tensor_core=False):
     i32 = ir.IntegerType.get_signless(32)
     ticks = arith.constant(i32, 10000000)
