@@ -31,6 +31,8 @@ from jax.experimental import pallas as pl
 from jax.experimental.pallas import triton as plgpu
 import numpy as np
 
+NamedSharding = typing.Any
+P = core.P
 
 DEFAULT_BLOCK_M = 64
 DEFAULT_BLOCK_N = 64
@@ -453,8 +455,12 @@ def _pallas_ragged_dot_general_impl(
                                           # precision parameter in the kernels.
     preferred_element_type: DTypeLike | None = None,
     group_offset: Array | None = None,
+    out_sharding: NamedSharding | P | None = None
 ) -> Array:
 
+
+  if out_sharding is not None:
+    raise NotImplementedError
 
   if group_offset is not None:
     raise NotImplementedError("group_offset is not currently supported in the "

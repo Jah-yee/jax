@@ -5327,6 +5327,7 @@ class RaggedTest(jtu.JaxTestCase):
           lhs, rhs, group_sizes, ragged_dot_dimension_numbers=ragged_dnums,
           precision=jax.lax.Precision.DEFAULT,
           preferred_element_type=jnp.float32,
+          group_offset=None, out_sharding=None,
       )
     else:
       actual_shape = lax.ragged_dot_general(
