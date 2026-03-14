@@ -110,7 +110,8 @@ class PallasSCTest(jtu.JaxTestCase):
     return functools.partial(
         pl.kernel,
         compiler_params=pltpu.CompilerParams(
-            use_tc_tiling_on_sc=self.USE_TC_TILING
+            kernel_type=pltpu.CoreType.SC_SCALAR_SUBCORE,
+            use_tc_tiling_on_sc=self.USE_TC_TILING,
         ),
         **kwargs,
     )
