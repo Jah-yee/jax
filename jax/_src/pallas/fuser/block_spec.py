@@ -391,6 +391,28 @@ def _block_shapes_equal(
   return all(_block_dim_equal(b1, b2) for b1, b2 in zip(bs1, bs2))
 
 
+def _compare_index_transforms(idx_map1, idx_map2, block_idxs_avals) -> bool:
+  if idx_map1 is idx_map2: return True
+  idx_map_jaxpr1 = jax.make_jaxpr(idx_map1)(*block_idxs_avals)
+  idx_map_jaxpr2 = jax.make_jaxpr(idx_map2)(*block_idxs_avals)
+  return fuser_utils.compare_jaxprs(idx_map_jaxpr1, idx_map_jaxpr2)
+
+
+def _block_transforms_equal(
+    bs1: BlockIndexTransform | NoBlockIndexTransform,
+    bs2: BlockIndexTransform | NoBlockIndexTransform,
+    block_idxs_avals: tuple[tuple[core.AbstractValue, ...], ...],
+) -> bool:
+  if bs1 is bs2: return True
+  if (isinstance(bs1, BlockIndexTransform) and
+      isinstance(bs2, BlockIndexTransform)):
+    return (_block_shapes_equal(bs1.block_shape, bs2.block_shape) and
+            _compare_index_transforms(bs1.block_index_transform,
+                                bs2.block_index_transform,
+                                block_idxs_avals))
+  return False
+
+
 def _pull_block_transform(
     jaxpr: core.Jaxpr,
     out_block_transforms: tuple[BlockIndexTransform, ...],
@@ -405,6 +427,12 @@ def _pull_block_transform(
   jaxpr_invar_usages = util.safe_map(read_usage_env, jaxpr.invars)
   env: dict[core.Var, BlockIndexTransform] = {}
   scalar_prefetch_fn_env = {}
+
+  block_idxs_avals = tuple(
+      ((jax._src.core.ShapedArray((), jnp.int32),) *
+       len(out_block_transform.block_shape))
+      for out_block_transform in out_block_transforms
+  )
 
   for outvar, bs in zip(jaxpr.outvars, out_block_transforms, strict=True):
     assert isinstance(outvar, core.Var)
@@ -483,12 +511,11 @@ def _pull_block_transform(
       )
       ctx.scalar_prefetch_fn = scalar_prefetch_fn_env[i] = scalar_prefetch_fn
     for v, in_block_transform in zip(eqn.invars, in_block_transforms, strict=True):
-      # TODO(cjfj): Check that index map functions are equivalent (in jaxpr).
       if (
           not isinstance(v, core.Literal)
           and v in env
-          and not _block_shapes_equal(
-              env[v].block_shape, in_block_transform.block_shape)  # pytype: disable=attribute-error
+          and not _block_transforms_equal(
+              env[v], in_block_transform, block_idxs_avals)
       ):
         in_block_transform = BlockIndexTransform(_illegal, _illegal)  # pytype: disable=wrong-arg-types
       _write_block_spec(v, in_block_transform)
