@@ -1397,9 +1397,14 @@ mlir::tpu::CoreType EnqueueDMAOp::getTargetCoreType() {
 }
 
 LogicalResult EnqueueDMAOp::verify() {
-  auto target_sem_type = getMemRefType(getTargetSemaphore());
-  if (target_sem_type.getRank() != 0) {
-    return emitOpError("DMA target semaphore must be rank 0");
+  auto target_sem = getTargetSemaphore();
+  Type target_sem_elem_type;
+  if (target_sem) {
+    auto target_sem_type = getMemRefType(target_sem);
+    if (target_sem_type.getRank() != 0) {
+      return emitOpError("DMA target semaphore must be rank 0");
+    }
+    target_sem_elem_type = target_sem_type.getElementType();
   }
   auto source_sem = getSourceSemaphore();
   if (source_sem) {
@@ -1407,7 +1412,8 @@ LogicalResult EnqueueDMAOp::verify() {
     if (source_sem_type.getRank() != 0) {
       return emitOpError("DMA source semaphore reference must be rank 0");
     }
-    if (source_sem_type.getElementType() != target_sem_type.getElementType()) {
+    if (target_sem &&
+        source_sem_type.getElementType() != target_sem_elem_type) {
       return emitOpError(
           "DMA source and target semaphore must have the same type");
     }
@@ -1467,7 +1473,7 @@ LogicalResult EnqueueDMAOp::verify() {
         "Strict ordering is only supported on the SC scalar and vector "
         "subcores");
   }
-  if (isa<SemaphoreType>(target_sem_type.getElementType())) {
+  if (target_sem && isa<SemaphoreType>(target_sem_elem_type)) {
     if (HasMemorySpace(source_ty, MemorySpace::kSmem) ||
         HasMemorySpace(target_ty, MemorySpace::kSmem)) {
       return emitOpError(
@@ -1732,18 +1738,26 @@ LogicalResult EnqueueIndirectDMAOp::verify() {
 
 void WaitDMA2Op::build(OpBuilder& builder, OperationState& state,
                        Value semaphore, Value src, Value dst) {
-  build(builder, state, semaphore, src, dst, /*device_id=*/nullptr,
-        /*core_id=*/nullptr);
+  state.addOperands(semaphore);
+  state.addOperands(src);
+  state.addOperands(dst);
+  state.addAttribute(WaitDMA2Op::getOperandSegmentSizeAttr(),
+                     builder.getDenseI32ArrayAttr({1, 1, 1, 0, 0, 0}));
 }
 
 LogicalResult WaitDMA2Op::verify() {
-  MemRefType sem_type = getSemaphore().getType();
+  auto sem = getWaitOnSource() ? getSourceSemaphore() : getSemaphore();
+  if (!sem) {
+    return emitOpError("Requested semaphore to wait on is missing");
+  }
+
+  MemRefType sem_type = getMemRefType(sem);
   if (sem_type.getRank() != 0) {
     return emitOpError("DMA wait semaphore must be rank 0");
   }
 
   CoreType issuing_core = GetCoreTypeOfParentOp(**this);
-  if (getRefCoreType(getSemaphore()).value_or(issuing_core) != issuing_core) {
+  if (getRefCoreType(sem).value_or(issuing_core) != issuing_core) {
     return emitOpError("Can only await semaphores attached to the local core");
   }
 

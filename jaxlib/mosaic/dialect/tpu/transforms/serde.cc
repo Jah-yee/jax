@@ -126,6 +126,19 @@ LogicalResult enqueue_dma_upgrade(Operation* op, int version, bool&) {
 }
 
 LogicalResult enqueue_dma_downgrade(Operation* op, int version, bool&) {
+  if (version < 12) {
+    auto segment_attr = op->getAttrOfType<DenseI32ArrayAttr>(
+        OpTrait::AttrSizedOperandSegments<
+            EnqueueDMAOp>::getOperandSegmentSizeAttr());
+    if (segment_attr) {
+      const ArrayRef<int32_t> sizes = segment_attr.asArrayRef();
+      if (sizes.size() == 6 && sizes[3] == 0) {
+        return op->emitError(
+            "Cannot downgrade enqueue_dma without target_semaphore to version "
+            "< 12");
+      }
+    }
+  }
   if (version < 8) {
     auto ordering_attr = op->getAttrOfType<BoolAttr>("strict_ordering");
     if (ordering_attr != nullptr) {
@@ -192,10 +205,64 @@ LogicalResult wait_dma2_upgrade(Operation* op, int version, bool&) {
             EnqueueDMAOp>::getOperandSegmentSizeAttr(),
         mlir::DenseI32ArrayAttr::get(op->getContext(), {1, 1, 1, 0, 0}));
   }
+  if (version < 12) {
+    auto segment_attr = op->getAttrOfType<DenseI32ArrayAttr>(
+        OpTrait::AttrSizedOperandSegments<
+            EnqueueDMAOp>::getOperandSegmentSizeAttr());
+    if (!segment_attr) {
+      return op->emitError("Missing AttrSizedOperandSegments in wait_dma2");
+    }
+    const ArrayRef<int32_t> old_sizes = segment_attr.asArrayRef();
+    if (old_sizes.size() != 5) {
+      return op->emitError("Unexpected segment sizes in wait_dma2: ")
+             << old_sizes.size();
+    }
+
+    SmallVector<int32_t, 6> new_sizes = {old_sizes[0], old_sizes[1],
+                                         old_sizes[2], 0,
+                                         old_sizes[3], old_sizes[4]};
+    op->setAttr(OpTrait::AttrSizedOperandSegments<
+                    EnqueueDMAOp>::getOperandSegmentSizeAttr(),
+                DenseI32ArrayAttr::get(op->getContext(), new_sizes));
+
+    op->setAttr("wait_on_source", BoolAttr::get(op->getContext(), false));
+  }
   return success();
 }
 
 LogicalResult wait_dma2_downgrade(Operation* op, int version, bool&) {
+  if (version < 12) {
+    auto wait_on_source_attr = op->getAttrOfType<BoolAttr>("wait_on_source");
+    if (wait_on_source_attr && wait_on_source_attr.getValue()) {
+      return op->emitError(
+          "Cannot downgrade wait_dma2 with wait_on_source=true to version < "
+          "12");
+    }
+
+    auto segment_attr = op->getAttrOfType<DenseI32ArrayAttr>(
+        OpTrait::AttrSizedOperandSegments<
+            EnqueueDMAOp>::getOperandSegmentSizeAttr());
+    if (!segment_attr) {
+      return op->emitError("Missing AttrSizedOperandSegments in wait_dma2");
+    }
+    const ArrayRef<int32_t> new_sizes = segment_attr.asArrayRef();
+
+    if (new_sizes.size() == 6) {
+      if (new_sizes[3] > 0) {
+        return op->emitError(
+            "Cannot downgrade wait_dma2 with source_semaphore to version < 12");
+      }
+
+      SmallVector<int32_t, 5> old_sizes = {
+          new_sizes[0], new_sizes[1], new_sizes[2], new_sizes[4], new_sizes[5]};
+      op->setAttr(OpTrait::AttrSizedOperandSegments<
+                      EnqueueDMAOp>::getOperandSegmentSizeAttr(),
+                  DenseI32ArrayAttr::get(op->getContext(), old_sizes));
+
+      op->removeAttr("wait_on_source");
+      op->removeAttr("priority");
+    }
+  }
   if (version < 7) {
     auto operands = op->getAttrOfType<mlir::DenseI32ArrayAttr>(
         OpTrait::AttrSizedOperandSegments<
