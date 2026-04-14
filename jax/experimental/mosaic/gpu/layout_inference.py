@@ -1306,6 +1306,29 @@ def _vector_extract_constraint_system(
   )
 
 
+@_add_constraint_system_derivation_rule(vector.InsertStridedSliceOp)
+def _insert_strided_slice_constraint_system(
+    ctx: DerivationContext, op: vector.InsertStridedSliceOp
+) -> ConstraintSystemDerivationRuleResult:
+  del ctx
+  src = ValueSite(op, VariableType.OPERAND, 0)
+  dst = ValueSite(op, VariableType.OPERAND, 1)
+  result = ValueSite(op, VariableType.RESULT, 0)
+  variable = cs.Variable(dst)
+  offsets = tuple(ir.IntegerAttr(o).value for o in op.offsets)
+  constraints = [
+      cs.Divides(variable, offsets),
+      # TODO(allanrenucci): Remove once vectors with splat and strided layouts
+      # can be sliced.
+      cs.NotOfType(variable, fa.WGSplatFragLayout),
+      cs.NotOfType(variable, fa.WGStridedFragLayout),
+  ]
+  return (
+      cs.ConstraintSystem(constraints=constraints),
+      {variable: [src, dst, result]},
+  )
+
+
 @_add_constraint_system_derivation_rule(mgpu.CustomPrimitiveOp)
 def _custom_primitive_constraint_system(
     ctx: DerivationContext,
