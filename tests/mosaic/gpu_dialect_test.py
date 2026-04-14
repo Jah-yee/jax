@@ -493,6 +493,64 @@ class DialectTest(MosaicGpuTest):
     ):
       self.module.operation.verify()
 
+  def test_async_store_op_with_gmem_peer_id(self):
+    with ir.InsertionPoint(self.module.body):
+      source, destination, peer_id, *indices = undefs(
+          ir.MemRefType.get([4, 8], ir.F32Type.get()),
+          ir.MemRefType.get([4, 8], ir.F32Type.get()),
+          ir.IntegerType.get_signless(32),
+          ir.IntegerType.get_signless(32),
+          ir.IntegerType.get_signless(32),
+      )
+      mgpu.dialect.async_store(
+          source,
+          destination,
+          indices,
+          slice_lengths=[4, 8],
+          gmem_peer_id=peer_id,
+      )
+    self.assertTrue(self.module.operation.verify())
+
+  def test_async_store_op_with_global_broadcast(self):
+    with ir.InsertionPoint(self.module.body):
+      source, destination, *indices = undefs(
+          ir.MemRefType.get([4, 8], ir.F32Type.get()),
+          ir.MemRefType.get([4, 8], ir.F32Type.get()),
+          ir.IntegerType.get_signless(32),
+          ir.IntegerType.get_signless(32),
+      )
+      mgpu.dialect.async_store(
+          source,
+          destination,
+          indices,
+          slice_lengths=[4, 8],
+          is_global_broadcast=ir.BoolAttr.get(True),
+      )
+    self.assertTrue(self.module.operation.verify())
+
+  def test_async_store_op_with_global_broadcast_and_gmem_peer_id_set_fails(self):
+    with ir.InsertionPoint(self.module.body):
+      source, destination, peer_id, *indices = undefs(
+          ir.MemRefType.get([4, 8], ir.F32Type.get()),
+          ir.MemRefType.get([4, 8], ir.F32Type.get()),
+          ir.IntegerType.get_signless(32),
+          ir.IntegerType.get_signless(32),
+          ir.IntegerType.get_signless(32),
+      )
+      mgpu.dialect.async_store(
+          source,
+          destination,
+          indices,
+          slice_lengths=[4, 8],
+          is_global_broadcast=ir.BoolAttr.get(True),
+          gmem_peer_id=peer_id
+      )
+    with self.assertRaisesRegex(
+        ir.MLIRError,
+        "Both `gmem_peer_id` or `is_global_broadcast` cannot be specified",
+    ):
+      self.module.operation.verify()
+
   def test_wgmma_types_match(self):
     with ir.InsertionPoint(self.module.body):
       acc, a, b = undefs(

@@ -14,6 +14,7 @@
 
 """Tests for distributed pallas GPU operations."""
 
+from collections.abc import Sequence
 import dataclasses
 import functools
 import os
@@ -26,6 +27,7 @@ from absl.testing import absltest
 from absl.testing import parameterized
 import jax
 from jax import lax
+from jax._src import dtypes
 from jax._src import test_multiprocess as jt_multiprocess
 from jax._src import test_util as jtu
 from jax._src.config import config
@@ -186,6 +188,17 @@ class TestCase(_TestCaseBase, metaclass=PallasTestMetaclass):
     # the assertion failure on teardown.
     self.monkey_patched_api_was_used = True
     super().skipTest(msg)
+
+  def default_transforms(
+      self, *, swizzle: int = 128, dtype: jnp.dtype
+  ) -> Sequence[plgpu.Transform]:
+    if self.is_wg_semantics():
+      return ()
+    swizzle_elems = 8 * swizzle // dtypes.itemsize_bits(dtype)
+    return (
+        plgpu.TilingTransform((8, swizzle_elems)),
+        plgpu.SwizzleTransform(swizzle),
+    )
 
 
 class PallasCallRemoteDMATest(TestCase):
@@ -726,8 +739,6 @@ class PallasCallRemoteDMATest(TestCase):
 
   @parameterized.parameters(False, True)
   def test_copy_tma(self, use_dict):
-    # TODO(bchetioui): support for remote refs.
-    self.skip_if_wg_semantics()
     if jax.process_index() > 2:
       return  # Only 2 processes needed.
 
@@ -752,7 +763,7 @@ class PallasCallRemoteDMATest(TestCase):
       pl.semaphore_signal(sem, 1, device_id=ids(zero, other_dev_id))
       pl.semaphore_wait(sem)
 
-    transforms = (plgpu.TilingTransform((8, 32)), plgpu.SwizzleTransform(128))
+    transforms = self.default_transforms(dtype=jnp.int32)
     kernel_call = self.pallas_call(
         kernel,
         out_specs=pl.BlockSpec(memory_space=plgpu.GMEM),
@@ -858,8 +869,6 @@ class PallasCallMultimemTest(TestCase):
     np.testing.assert_array_equal(y, np.concat([ref, ref], axis=0), strict=True)
 
   def test_multimem_store_tma(self):
-    # TODO(bchetioui): support for multimem store.
-    self.skip_if_wg_semantics()
     if jax.process_index() > 2:
       return  # Only 2 processes needed.
 
@@ -874,7 +883,7 @@ class PallasCallMultimemTest(TestCase):
       pl.semaphore_signal(sem, 1, device_id=other_dev_id)
       pl.semaphore_wait(sem)
 
-    transforms = (plgpu.TilingTransform((8, 32)), plgpu.SwizzleTransform(128))
+    transforms = self.default_transforms(dtype=jnp.int32)
     kernel_call = self.pallas_call(
         kernel,
         out_specs=pl.BlockSpec(memory_space=plgpu.GMEM),
