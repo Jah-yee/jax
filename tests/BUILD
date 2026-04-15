@@ -1650,6 +1650,10 @@ pytype_test(
 jax_py_test(
     name = "util_test",
     srcs = ["util_test.py"],
+    shard_count = select({
+        "//tests/config:is_asan_rbe": 6,
+        "//conditions:default": 1,
+    }),
     deps = [
         "//jax",
         "//jax/_src:test_util",
@@ -1724,7 +1728,12 @@ jax_multiplatform_test(
 jax_multiplatform_test(
     name = "ode_test",
     srcs = ["ode_test.py"],
-    shard_count = 2,
+    shard_count = {
+        "cpu": select({
+            "//tests/config:is_asan_rbe": 8,
+            "//conditions:default": 1,
+        }),
+    },
     deps = ["//jax/experimental:ode"] + py_deps([
         "absl/testing",
         "numpy",
