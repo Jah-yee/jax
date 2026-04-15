@@ -95,7 +95,7 @@ jobs:
         shell: bash
     runs-on: ${{ inputs.runner }}
     container:
-      image: ghcr.io/rocm/jax-dev-ubu24.${{ inputs.rocm-tag }}:latest
+      image: ghcr.io/rocm/jax-dev-ubu24.${{ inputs.rocm-tag }}:@sha256:88a397a3c85416e8ceb638615a9807a09c549824
       volumes:
         - /data:/data
       options: >-
