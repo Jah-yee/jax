@@ -2050,6 +2050,7 @@ def _memref_load_op_lowering_rule(
       memref=unwrap_transformed_memref(op.memref, in_transforms),
       indices=op.indices,
       nontemporal=op.nontemporal,
+      loc=op.operation.location,
   )
   return [new_load_op.result]
 
@@ -2073,6 +2074,7 @@ def _memref_store_op_lowering_rule(
       memref=unwrap_transformed_memref(op.memref, in_transforms),
       indices=op.indices,
       nontemporal=op.nontemporal,
+      loc=op.operation.location,
   )
   return []
 
