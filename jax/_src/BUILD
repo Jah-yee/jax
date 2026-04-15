@@ -1116,7 +1116,6 @@ pytype_strict_library(
     type_checking = "pyrefly",
     deps = [
         ":util",
-        "//jax/_src/lib",
     ],
 )
 

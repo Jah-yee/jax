@@ -1038,7 +1038,10 @@ class ShardingTest(jtu.JaxTestCase):
   def test_pspec_tuple(self):
     pspec = P('x', 'y', 'z')
     self.assertEqual(pspec.index('z'), 2)
-    self.assertEqual(hash(P(None, 'x', 'y', 'z')), hash(P((), 'x', 'y', 'z')))
+    out1 = P(None, 'x', 'y', 'z')
+    out2 = P((), 'x', 'y', 'z')
+    self.assertEqual(hash(out1), hash(out2))
+    self.assertIs(out1, out2)
 
   @parameterized.named_parameters(
       ('sharded_dim_0', (4, 2), 0),
@@ -1461,7 +1464,7 @@ class ShardingTest(jtu.JaxTestCase):
       NamedSharding(mesh, P('x', unreduced={'y', 'z'}))
 
     with self.assertRaisesRegex(
-        ValueError, "unreduced cannot contain None.*"):
+        ValueError, "`unreduced`.*cannot contain None.*"):
       NamedSharding(mesh, P('x', unreduced={'y', None}))
 
   def test_hlo_sharding_get_axis_sizes(self):
@@ -1523,7 +1526,7 @@ class ShardingTest(jtu.JaxTestCase):
       jax.P((('a', 'b'), 'c'))
 
   def test_pspec_subclass_error(self):
-    with self.assertRaisesRegex(TypeError, "prohibits subclassing"):
+    with self.assertRaisesRegex(TypeError, "Subclassing `jax.P` is prohibited"):
       class MyP(jax.P):
         pass
 
