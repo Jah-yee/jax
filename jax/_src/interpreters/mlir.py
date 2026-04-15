@@ -2995,7 +2995,7 @@ def _wrap_with_spmd_op(name: str,
                        has_side_effect: bool = False,
                        allow_shardy_lowering: bool = False):
   if config.use_shardy_partitioner.value and allow_shardy_lowering:
-    return dialects.sdy.ShardingConstraintOp(x, sharding.build()).result  # pyrefly: ignore[missing-attribute]
+    return dialects.sdy.sharding_constraint(x, sharding.build())  # pyrefly: ignore[missing-attribute]
 
   # unspecified_dims indicate dimensions whose shardings are not specified and
   # XLA sharding propagation can change them.

@@ -1919,7 +1919,7 @@ def _composite_lowering(
     if v is not None:
       composite_attrs[k] = mlir.ir_attribute(v)
   symbol_name = func_op.name.value
-  composite = hlo.CompositeOp(
+  return hlo.composite(
       func_op.type.results,
       mlir.flatten_ir_values(const_arg_values + args),
       name=ir.StringAttr.get(name),
@@ -1927,7 +1927,6 @@ def _composite_lowering(
       composite_attributes=ir.DictAttr.get(composite_attrs),
       version=mlir.i32_attr(version),
   )
-  return composite.results
 
 
 def _composite_impl(*args, jaxpr, **_):
@@ -8438,7 +8437,7 @@ def _top_k_lower(ctx, operand, k, axis):
 
   # Compute the top-k along the last dimension
   if core.is_constant_dim(k):
-    results = chlo.TopKOp(operand, mlir.i64_attr(k)).results
+    results = chlo.top_k(operand, mlir.i64_attr(k))
   else:
     k_value, = mlir.eval_dynamic_shape_as_vals(ctx, (k,))
     out_values_aval, out_indices_aval, = ctx.avals_out

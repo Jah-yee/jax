@@ -147,14 +147,14 @@ def _elementwise_inline_asm_lowering(
           " supported on ROCm"
       )
 
-  return tt_dialect.ElementwiseInlineAsmOp(
+  return tt_dialect.elementwise_inline_asm(
       [*map(mlir.aval_to_ir_type, ctx.avals_out)],
       asm,
       constraints=constraints,
       pure=True,
       packed_element=pack,
       args=args,
-  ).result
+  )
 
 
 def _approx_tanh_rocm_lowering(
